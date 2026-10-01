@@ -72,6 +72,7 @@ class DiFluidClient:
                     timeout=20,
                 )
                 await self.client.start_notify(CHAR_UUID, self._notification)
+                _LOGGER.debug("Measurement notification subscription ready")
         except BaseException:
             with suppress(BleakError, TimeoutError, OSError):
                 await self.disconnect()
@@ -79,6 +80,13 @@ class DiFluidClient:
 
     def _notification(self, _characteristic: object, data: bytearray) -> None:
         for packet in self.decoder.feed(bytes(data)):
+            _LOGGER.debug(
+                "Received address=%s function=%s register=%s payload_length=%s",
+                packet.address,
+                packet.function,
+                packet.register,
+                len(packet.payload),
+            )
             if packet.address not in (0, 1):
                 continue
             if self.pending and self.pending[0] == (packet.function, packet.register):
@@ -88,6 +96,7 @@ class DiFluidClient:
             self.on_packet(packet)
 
     def _disconnected(self, _client: BleakClient) -> None:
+        _LOGGER.debug("Peripheral disconnected")
         if self.pending and not self.pending[1].done():
             self.pending[1].set_exception(BleakError("Instrument disconnected"))
         self.on_disconnect()
@@ -103,6 +112,12 @@ class DiFluidClient:
         async with self.lock:
             if not self.connected:
                 raise BleakError("Wake the instrument and wait for a Bluetooth connection")
+            _LOGGER.debug(
+                "Sending function=%s register=%s payload_length=%s",
+                function,
+                register,
+                len(payload),
+            )
             future: asyncio.Future[Packet] = asyncio.get_running_loop().create_future()
             self.pending = (response or (function, register), future)
             try:
