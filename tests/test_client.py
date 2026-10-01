@@ -64,3 +64,35 @@ def test_remote_measurement_ack_and_result_fixture():
         (0, 3, 6),
     ]
     assert packets[0].payload == bytes.fromhex("0000000001000000")
+
+
+async def test_failed_service_discovery_releases_partially_created_client(hass):
+    from unittest.mock import patch
+
+    from bleak.backends.device import BLEDevice
+
+    client = DiFluidClient(hass, "AA:BB:CC:DD:EE:FF", lambda p: None, lambda: None)
+    created = []
+
+    class FakeBackend:
+        def __init__(self, *args, **kwargs):
+            self.is_connected = False
+            self.disconnect = AsyncMock()
+            created.append(self)
+
+    async def failed_connect(factory, device, name, **kwargs):
+        factory(device)
+        raise BleakError("service discovery failed")
+
+    with (
+        patch("custom_components.difluid.client.BleakClientWithServiceCache", FakeBackend),
+        patch("custom_components.difluid.client.establish_connection", side_effect=failed_connect),
+        patch(
+            "custom_components.difluid.client.bluetooth.async_ble_device_from_address",
+            return_value=BLEDevice(client.address, "R2 PP Test", {}),
+        ),
+    ):
+        with pytest.raises(BleakError, match="service discovery"):
+            await client.connect()
+    created[0].disconnect.assert_awaited_once()
+    assert client.client is None

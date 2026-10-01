@@ -2,6 +2,13 @@
 
 # DiFluid for Home Assistant
 
+**Development status:** a startup regression is under investigation. The test
+instrument showed its logo then a black screen while HA was connecting, and
+booted normally after disabling the integration. Keep the HA entry disabled
+until controlled hardware validation is complete. The current source adds a
+boot delay, retry cooldown, and failure cutoff; these safeguards pass automated
+tests but have not yet been accepted on hardware. No GitHub release is published.
+
 Local Bluetooth integration for the **DiFluid R2 PP 0–35 Brix** refractometer.
 Switch it on, wait for **Connected**, and press **TEST**. Home Assistant records
 the completed measurement without the DiFluid app, an account, or cloud access.
@@ -61,7 +68,7 @@ the entities without replacing the integration's design.
 
 ## Recording and automations
 
-Keep the instrument connected before pressing TEST. HA reconnects when it wakes;
+Keep the instrument connected before pressing TEST. HA waits at least 20 seconds before connecting after wake-up;
 the **Connected** entity confirms the notification subscription is active.
 Readings remain available after the instrument sleeps, while controls become
 unavailable. No tests or clock changes are initiated automatically.
@@ -114,6 +121,13 @@ installation's startup behavior.
 - **Not discovered:** wake the PP, close the vendor app, check active Bluetooth
   coverage and free proxy connection slots. Only names matching `R2 PP *` with
   service `A0FF` are discovered.
+- **Logo followed by a black screen:** disable the DiFluid entry, close the app,
+  and retry power-on without a Bluetooth connection. This behavior is being
+  investigated; do not repeatedly re-enable the integration to retry it.
+- **Connection blocked:** automatic attempts stop after three connection failures
+  or short-lived connections. Repeated advertisements cannot bypass the
+  60-second cooldown. Leave the entry disabled if the instrument is affected;
+  reloading is an explicit reset of the attempt limit.
 - **Disconnected:** the PP automatically sleeps; this is normal. Leave HA
   running and wake the instrument. No app pairing or account is required.
 - **Connected but no result:** wait for a completed successful TEST. An error

@@ -25,6 +25,12 @@ from .protocol.codec import Packet
 from .protocol.measurement import parse_measurement
 
 _LOGGER = logging.getLogger(__name__)
+BOOT_GRACE_SECONDS = 20
+RETRY_COOLDOWN_SECONDS = 60
+MAX_CONNECTION_FAILURES = 3
+ADVERTISEMENT_MAX_AGE = 10
+STABLE_CONNECTION_SECONDS = 30
+METADATA_SETTLE_SECONDS = 3
 
 
 class DiFluidCoordinator(DataUpdateCoordinator[dict[str, Any]]):
@@ -51,6 +57,10 @@ class DiFluidCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self.unsubscribe: Callable[[], None] | None = None
         self.measurement_pending = False
         self.measurement_deadline = 0.0
+        self.not_before = self.hass.loop.time() + BOOT_GRACE_SECONDS
+        self.connection_failures = 0
+        self.connected_since: float | None = None
+        self.last_advertisement: float | None = None
 
     async def start(self) -> None:
         if saved := await self.store.async_load():
@@ -76,6 +86,10 @@ class DiFluidCoordinator(DataUpdateCoordinator[dict[str, Any]]):
     def _advertisement(
         self, _info: bluetooth.BluetoothServiceInfoBleak, _change: bluetooth.BluetoothChange
     ) -> None:
+        now = self.hass.loop.time()
+        if self.last_advertisement is None or now - self.last_advertisement > BOOT_GRACE_SECONDS:
+            self.not_before = max(self.not_before, now + BOOT_GRACE_SECONDS)
+        self.last_advertisement = now
         if not self.data["connected"]:
             self.wake.set()
 
@@ -84,37 +98,57 @@ class DiFluidCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         if self.stopped:
             return
         self.measurement_pending = False
+        now = self.hass.loop.time()
+        if self.connected_since is not None:
+            if now - self.connected_since < STABLE_CONNECTION_SECONDS:
+                self.connection_failures += 1
+            else:
+                self.connection_failures = 0
+        self.connected_since = None
+        self.not_before = max(self.not_before, now + RETRY_COOLDOWN_SECONDS)
         self._update(connected=False, status="disconnected")
         self.wake.set()
 
     def _update(self, **changes: object) -> None:
         self.async_set_updated_data({**self.data, **changes})
 
+    def _fresh_advertisement(self) -> bool:
+        info = bluetooth.async_last_service_info(self.hass, self.address, connectable=True)
+        return info is not None and self.hass.loop.time() - info.time <= ADVERTISEMENT_MAX_AGE
+
     async def _run(self) -> None:
-        delay = 2
         while not self.stopped:
             await self.wake.wait()
             self.wake.clear()
             if self.client.connected:
                 continue
+            if self.connection_failures >= MAX_CONNECTION_FAILURES:
+                self._update(connected=False, status="connection_blocked")
+                continue
+            # Advertisements and disconnect callbacks must not bypass this delay.
+            # V025 has shown a boot failure with immediate HA connection attempts.
+            await asyncio.sleep(max(0, self.not_before - self.hass.loop.time()))
+            if self.hass.loop.time() < self.not_before:
+                self.wake.set()
+                continue
+            if not self._fresh_advertisement():
+                # Never repeatedly connect using stale cached discovery data.
+                continue
+            failures_before = self.connection_failures
             try:
                 await self.client.connect()
+                self.connected_since = self.hass.loop.time()
                 self._update(connected=True, status="ready")
-                delay = 2
+                await asyncio.sleep(METADATA_SETTLE_SECONDS)
                 await self.refresh_metadata()
             except (BleakError, TimeoutError, OSError) as err:
                 _LOGGER.debug("DiFluid connection unavailable: %s", err)
+                self.connected_since = None
+                self.connection_failures = max(self.connection_failures, failures_before + 1)
                 with suppress(BleakError, TimeoutError, OSError):
                     await self.client.disconnect()
+                self.not_before = self.hass.loop.time() + RETRY_COOLDOWN_SECONDS
                 self._update(connected=False, status="disconnected")
-                self.wake.clear()
-                # Fresh advertisements can wake this early. Otherwise retry cached
-                # devices at a bounded rate, including proxies that suppress repeats.
-                try:
-                    await asyncio.wait_for(self.wake.wait(), timeout=delay)
-                except TimeoutError:
-                    pass
-                delay = min(delay * 2, 60)
                 self.wake.set()
 
     async def refresh_metadata(self) -> None:

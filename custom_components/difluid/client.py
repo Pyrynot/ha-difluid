@@ -3,6 +3,8 @@
 import asyncio
 import logging
 from collections.abc import Callable
+from contextlib import suppress
+from typing import Any
 
 from bleak import BleakClient
 from bleak.exc import BleakError
@@ -44,22 +46,35 @@ class DiFluidClient:
         if device is None:
             raise BleakError("Instrument is not currently visible")
         self.decoder.reset()
-        self.client = await establish_connection(
-            BleakClientWithServiceCache,
-            device,
-            device.name or "DiFluid R2 PP",
-            disconnected_callback=self._disconnected,
-            ble_device_callback=lambda: (
-                bluetooth.async_ble_device_from_address(self.hass, self.address, connectable=True)
-                or device
-            ),
-            max_attempts=2,
-            timeout=20,
-        )
+        owner = self
+
+        class ManagedClient(BleakClientWithServiceCache):
+            """Retain ownership even if service discovery or connect is cancelled."""
+
+            def __init__(self, *args: Any, **kwargs: Any) -> None:
+                super().__init__(*args, **kwargs)
+                owner.client = self
+
         try:
-            await self.client.start_notify(CHAR_UUID, self._notification)
+            async with asyncio.timeout(30):
+                self.client = await establish_connection(
+                    ManagedClient,
+                    device,
+                    device.name or "DiFluid R2 PP",
+                    disconnected_callback=self._disconnected,
+                    ble_device_callback=lambda: (
+                        bluetooth.async_ble_device_from_address(
+                            self.hass, self.address, connectable=True
+                        )
+                        or device
+                    ),
+                    max_attempts=1,
+                    timeout=20,
+                )
+                await self.client.start_notify(CHAR_UUID, self._notification)
         except BaseException:
-            await self.disconnect()
+            with suppress(BleakError, TimeoutError, OSError):
+                await self.disconnect()
             raise
 
     def _notification(self, _characteristic: object, data: bytearray) -> None:
@@ -106,5 +121,5 @@ class DiFluidClient:
 
     async def disconnect(self) -> None:
         client, self.client = self.client, None
-        if client and client.is_connected:
+        if client:
             await client.disconnect()

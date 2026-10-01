@@ -14,6 +14,20 @@ are leads only. The device observed here uses **DADA encrypted frames**, not the
 Extract SDK's DFDF frames. Generic PU tail fields and battery layout also differ
 from the PP's observed messages; unsupported interpretations are not exposed.
 
+## Startup compatibility remains unverified
+
+The physical TEST-to-Recorder path passed on V025-dirty, but cold-start behavior
+subsequently failed: the user saw the boot logo followed by a black screen while
+HA attempted connections. After the entry was disabled, the instrument booted
+normally. This implicates the connection path but does not isolate whether
+connection establishment, notification setup, or metadata queries trigger it.
+
+The integration stays disabled during investigation. The proposed mitigation
+waits 20 seconds after discovery, requires a fresh advertisement, enforces a
+60-second reconnect cooldown, and stops after three failures/short connections.
+Connection setup is bounded to 30 seconds and partial clients are cleaned up.
+These changes need controlled hardware testing before any release.
+
 ## Transport and framing
 
 - Advertised service: `0000a0ff-0000-1000-8000-00805f9b34fb`.
