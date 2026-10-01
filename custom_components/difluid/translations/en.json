@@ -1,0 +1,14 @@
+{
+  "title": "DiFluid",
+  "config": {
+    "step": {
+      "user": {"title": "Select your DiFluid R2 PP", "description": "Switch on the instrument and close the DiFluid app. A connectable Bluetooth adapter or active proxy must be nearby.", "data": {"address": "Instrument"}},
+      "confirm": {"title": "Add {name}", "description": "Home Assistant will listen for completed TEST measurements while the instrument is awake. Close the DiFluid app to let Home Assistant connect."}
+    },
+    "abort": {
+      "already_configured": "This instrument is already configured.",
+      "not_supported": "This model is not supported by the verified R2 PP protocol.",
+      "no_devices_found": "No unconfigured R2 PP found. Switch it on, close the DiFluid app, and check active Bluetooth proxy coverage."
+    }
+  }
+}
