@@ -14,7 +14,7 @@ are leads only. The device observed here uses **DADA encrypted frames**, not the
 Extract SDK's DFDF frames. Generic PU tail fields and battery layout also differ
 from the PP's observed messages; unsupported interpretations are not exposed.
 
-## Startup compatibility remains unverified
+## Startup safeguards and validation
 
 The physical TEST-to-Recorder path passed on V025-dirty, but cold-start behavior
 subsequently failed: the user saw the boot logo followed by a black screen while
@@ -22,11 +22,25 @@ HA attempted connections. After the entry was disabled, the instrument booted
 normally. This implicates the connection path but does not isolate whether
 connection establishment, notification setup, or metadata queries trigger it.
 
-The integration stays disabled during investigation. The proposed mitigation
-waits 20 seconds after discovery, requires a fresh advertisement, enforces a
-60-second reconnect cooldown, and stops after three failures/short connections.
-Connection setup is bounded to 30 seconds and partial clients are cleaned up.
-These changes need controlled hardware testing before any release.
+The integration now waits 20 seconds after discovery, requires a fresh
+advertisement, enforces a 60-second reconnect cooldown, and stops after three
+failures/short connections. Connection setup is bounded to 30 seconds and
+partial clients are cleaned up.
+
+A connection-only check after the PP had fully booted passed with its screen
+remaining normal. On 2026-10-02, a monitored startup with the guarded integration
+also passed: the screen remained normal, notification subscription succeeded,
+and firmware, profile, clock, and timezone queries all returned valid replies
+without a retry. This validates the tested sequence, not a definitive explanation
+of the original firmware failure. If it recurs, disable the integration before
+retrying power-on.
+
+Completed physical measurements and Recorder persistence were verified before
+the startup change. A new sample measurement after the change was skipped at
+the user's request because no sample was available; captured-frame and HA entity
+tests cover that path. Calibration remains untested and unexposed. Clock/timezone
+reads are hardware-verified; setting writes have readback checks and automated
+tests but have not been exercised on this device.
 
 ## Transport and framing
 

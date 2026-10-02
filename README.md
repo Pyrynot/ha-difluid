@@ -2,13 +2,6 @@
 
 # DiFluid for Home Assistant
 
-**Development status:** a startup regression is under investigation. The test
-instrument showed its logo then a black screen while HA was connecting, and
-booted normally after disabling the integration. Keep the HA entry disabled
-until controlled hardware validation is complete. The current source adds a
-boot delay, retry cooldown, and failure cutoff; these safeguards pass automated
-tests but have not yet been accepted on hardware. No GitHub release is published.
-
 Local Bluetooth integration for the **DiFluid R2 PP 0–35 Brix** refractometer.
 Switch it on, wait for **Connected**, and press **TEST**. Home Assistant records
 the completed measurement without the DiFluid app, an account, or cloud access.
@@ -29,7 +22,6 @@ Extract SDK. [Protocol and compatibility details](docs/protocol.md).
 4. Accept the discovered device under **Settings → Devices & services**, or use
    **Add integration → DiFluid**.
 
-The GitHub repository must contain the release before HACS can install it.
 For manual installation, copy `custom_components/difluid` into your HA
 `config/custom_components/` directory and restart HA.
 
@@ -122,8 +114,9 @@ installation's startup behavior.
   coverage and free proxy connection slots. Only names matching `R2 PP *` with
   service `A0FF` are discovered.
 - **Logo followed by a black screen:** disable the DiFluid entry, close the app,
-  and retry power-on without a Bluetooth connection. This behavior is being
-  investigated; do not repeatedly re-enable the integration to retry it.
+  and retry power-on without a Bluetooth connection. This occurred with immediate startup connections in an earlier build.
+  The guarded build passed a monitored startup test, but the precise firmware
+  trigger is unproven; do not repeatedly reconnect if the symptom recurs.
 - **Connection blocked:** automatic attempts stop after three connection failures
   or short-lived connections. Repeated advertisements cannot bypass the
   60-second cooldown. Leave the entry disabled if the instrument is affected;
