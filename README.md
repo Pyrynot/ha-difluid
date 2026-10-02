@@ -1,86 +1,133 @@
-<p align="center"><img src="custom_components/difluid/brand/logo.png" alt="DiFluid Technology" width="260"></p>
+<p align="center">
+  <img src="custom_components/difluid/brand/logo.png" alt="DiFluid" width="260">
+</p>
 
 # DiFluid for Home Assistant
 
-Local Bluetooth integration for the **DiFluid R2 PP 0–35 Brix** refractometer.
-Switch it on, wait for **Connected**, and press **TEST**. Home Assistant records
-the completed measurement without the DiFluid app, an account, or cloud access.
+Record refractometer measurements in Home Assistant over local Bluetooth.
+Turn on your **DiFluid R2 PP**, wait for it to connect, and press **TEST** on the
+instrument. Your completed measurement appears in Home Assistant automatically,
+without the DiFluid app or a cloud account.
 
-**Domain:** `difluid` · **Home Assistant:** 2026.9 or newer · **Verified firmware:** `V025-dirty`
+[![Validate](https://github.com/Pyrynot/ha-difluid/actions/workflows/validate.yml/badge.svg)](https://github.com/Pyrynot/ha-difluid/actions/workflows/validate.yml)
+[![Release](https://img.shields.io/github/v/release/Pyrynot/ha-difluid)](https://github.com/Pyrynot/ha-difluid/releases)
 
-R2 Extract, R2 PU, R1, and other firmware variants are not claimed as supported.
-The PP tested here uses encrypted framing that differs from the published
-Extract SDK. [Protocol and compatibility details](docs/protocol.md).
+- Brix, sample temperature, refractive index, and battery readings.
+- A measurement event for automations, including consecutive tests with equal values.
+- Last successful readings retained when the instrument sleeps or HA restarts.
+- On-demand measurement and device-information controls.
+- Local Bluetooth adapters and active ESPHome Bluetooth proxies.
+- DiFluid logo and icon included for the Home Assistant device page.
 
-## Installation
+This is an independent community integration, not an official DiFluid product.
 
-1. In HACS, open **Custom repositories**, add `https://github.com/Pyrynot/ha-difluid`,
-   and choose **Integration**.
-2. Download **DiFluid** and restart Home Assistant.
-3. Close the DiFluid app and turn on the instrument near an active Bluetooth
-   adapter or ESPHome Bluetooth proxy.
-4. Accept the discovered device under **Settings → Devices & services**, or use
-   **Add integration → DiFluid**.
+## Compatibility
 
-For manual installation, copy `custom_components/difluid` into your HA
-`config/custom_components/` directory and restart HA.
+| Requirement | Supported configuration |
+| --- | --- |
+| Instrument | **DiFluid R2 PP, 0–35 Brix** |
+| Verified instrument firmware | `V025-dirty` |
+| Home Assistant | **2026.9.0 or newer** |
+| Bluetooth | HA Bluetooth integration with a connectable adapter or active ESPHome proxy |
+| Installation | HACS custom repository or manual installation |
+| Integration domain | `difluid` |
 
-The integration uses Home Assistant's Bluetooth manager and supports active
-ESPHome proxies. The peripheral occupies a connection slot while awake. A
-passive advertisement-only receiver cannot receive completed measurements.
+Other firmware versions have not been verified. **R2 Extract, R2 PU, R1, and
+other DiFluid models are not currently supported.** Similar product names or
+third-party compatibility reports do not establish protocol compatibility.
+See [protocol and hardware validation](docs/protocol.md) for the evidence behind
+the supported features.
 
-## Readings and controls
+## Install through HACS
 
-Entities appear when their fields are received. The integration does not invent
-readings for absent fields. The device page includes:
+Install [HACS](https://www.hacs.xyz/docs/use/) first if it is not already available.
+This integration is installed as a **custom repository**; it is not listed in the
+default HACS catalog.
 
-- **Brix**, **sample temperature**, **refractive index** (rounded to five decimal
-  places), and **battery** from the latest completed sample.
-- **Last measurement** (HA receipt time), **measurement device time**, and a
-  **Measurement event** carrying the sample ID and all primary values.
-- **Connected**, instrument **status**, last error code, firmware, and the active
-  concentration profile's index, name, and unit.
-- **Measure** and **Refresh device information** buttons.
-- **Synchronize clock** and **Timezone offset** controls, disabled by default;
-  enable them in the entity settings if wanted. Timezone is a fixed UTC offset
-  in half-hour increments; it does not automatically follow daylight saving.
-- Additional reported concentration, optical, timing, exposure, and status
-  fields as disabled diagnostic sensors. Their raw protocol names are retained
-  where units or physical interpretation have not been established.
+1. Open **HACS → ⋮ → Custom repositories**.
+2. Add `https://github.com/Pyrynot/ha-difluid` and select **Integration** as the type.
+3. Find **DiFluid** in HACS and download the latest release.
+4. Restart Home Assistant.
+5. Close the DiFluid app and turn on the R2 PP within Bluetooth range.
+6. Open **Settings → Devices & services** and configure the discovered DiFluid
+   device. Alternatively, choose **Add integration → DiFluid**.
 
-Battery is the value in the last completed measurement, not a continuous poll.
-The generic app's standalone battery-response schema did not match this PP and
-is deliberately not decoded as a percentage or charging status.
+No YAML configuration, account, or app pairing is required. Future releases can
+be installed through HACS; restart Home Assistant after an update.
 
-Calibration is not exposed: its side effects were not hardware-tested. Profile
-coefficient editing, Wi-Fi, firmware updates, and offline history retrieval are
-also unverified. Existing protocol definitions from related instruments are not
-sufficient evidence of PP support. New verified fields and commands can extend
-the entities without replacing the integration's design.
+### Manual installation
 
-## Recording and automations
+Download a [release](https://github.com/Pyrynot/ha-difluid/releases) and copy its
+`custom_components/difluid` directory into your Home Assistant configuration
+directory at `config/custom_components/difluid`. Restart HA, then follow steps
+5–6 above.
 
-Keep the instrument connected before pressing TEST. HA waits at least 20 seconds before connecting after wake-up;
-the **Connected** entity confirms the notification subscription is active.
-Readings remain available after the instrument sleeps, while controls become
-unavailable. No tests or clock changes are initiated automatically.
+## Take a measurement
 
-Each successful sample updates the Measurement event, including repeated tests
-with equal numeric values. Start/progress packets, errors, and calibration
-records do not overwrite the last successful measurement. Exact record replays
-are suppressed using the last 64 sample identities, retained across restarts.
-An event timestamp is HA's receipt time; the instrument's clock is preserved
-separately. Reconnection is not a promise of retrieving measurements made while
-HA was disconnected: a durable device history API has not been verified.
+1. Keep the DiFluid app closed so Home Assistant can connect to the instrument.
+2. Turn on the R2 PP and wait until its **Connected** entity is on. The integration
+   deliberately waits at least **20 seconds** before connecting after discovery.
+3. Prepare your sample and press **TEST** on the instrument.
+4. When the test finishes successfully, Home Assistant updates the readings and
+   the **Measurement** event.
 
-HA Recorder normally records the entities automatically; ensure your custom
-Recorder include/exclude rules allow them. These are individual samples, not a
-continuous process, so sensors intentionally have no long-term statistics
-`state_class`. Retention follows your HA Recorder configuration. The integration
-also stores the latest sample locally for restoration, without replaying it as
-a new measurement event.
+The instrument can sleep normally afterward. The last successful readings remain
+available, while device controls become unavailable until it reconnects. Home
+Assistant never starts a measurement or changes the device clock automatically.
 
-Example automation (replace the entity ID with yours):
+Keep HA connected while testing: retrieval of measurements taken while
+disconnected is not supported. A passive Bluetooth receiver cannot receive
+measurement notifications; an ESPHome proxy needs active connections enabled
+and a free connection slot.
+
+## Entities and controls
+
+Entities are added as the instrument reports the corresponding fields. Optional
+diagnostics and settings are disabled by default and can be enabled from their
+entity settings.
+
+| Feature | What it provides |
+| --- | --- |
+| Brix | Concentration from the PP's reported Brix profile |
+| Sample temperature | Reported prism/sample temperature in °C |
+| Refractive index | Reported value rounded to **five decimal places** |
+| Battery | Percentage reported with the last completed measurement |
+| Last measurement | Time Home Assistant received the sample |
+| Measurement device time | Timestamp reported by the instrument |
+| Measurement event | A distinct completed sample, its ID, timestamps, and primary readings |
+| Connected and Status | Bluetooth subscription and instrument/connection state |
+| Device information | Firmware, profile index/name/unit, and last error code |
+| Measure | Request a single measurement from Home Assistant |
+| Refresh device information | Read firmware, profile, clock, and timezone |
+| Synchronize clock | Optional control to set the instrument clock |
+| Timezone offset | Optional fixed UTC offset in half-hour increments |
+| Additional diagnostics | Reported concentration, optical, timing, exposure, and status fields |
+
+Battery is not continuously polled. Five-decimal refractive-index reporting does
+not imply greater instrument accuracy. Diagnostic fields retain protocol names
+where their units or physical meaning are not established.
+
+Clock and timezone reads have been verified on hardware; their optional setting
+controls have automated tests but have not been hardware-tested. The timezone
+is a fixed offset and does not automatically follow daylight saving time.
+
+Calibration, profile editing, Wi-Fi setup, firmware updates, and offline history
+retrieval are not exposed because they have not been verified on the R2 PP.
+
+## History and automations
+
+Home Assistant's Recorder normally saves the sensor states and measurement
+events. If you use Recorder include/exclude rules, allow the DiFluid entities.
+History retention follows your Recorder settings. These are individual samples,
+so the sensors do not generate long-term statistics.
+
+Use the **Measurement event** for automations that must distinguish separate
+tests with equal Brix values. Start/progress, failed tests, and calibration
+records do not replace a successful reading. Exact record replays are suppressed
+across reconnects and restarts.
+
+Example notification automation — replace the entity ID with the one on your
+DiFluid device page:
 
 ```yaml
 alias: DiFluid completed measurement
@@ -104,41 +151,48 @@ actions:
         RI {{ trigger.to_state.attributes.refractive_index }}
 ```
 
-The condition avoids notifications during HA state restoration. To handle the
-first-ever measurement as well, use a trigger/condition suitable for your
-installation's startup behavior.
+This conservative example skips transitions from unknown/unavailable states,
+including the first-ever event, to avoid a notification on state restoration.
+Adapt that condition if your automation also needs to handle the first event.
+Event attributes include `measurement_id`, `device_time`, `received_at`, `brix`,
+`temperature`, `refractive_index`, and `battery`.
 
 ## Troubleshooting
 
-- **Not discovered:** wake the PP, close the vendor app, check active Bluetooth
-  coverage and free proxy connection slots. Only names matching `R2 PP *` with
-  service `A0FF` are discovered.
-- **Logo followed by a black screen:** disable the DiFluid entry, close the app,
-  and retry power-on without a Bluetooth connection. This occurred with immediate startup connections in an earlier build.
-  The guarded build passed a monitored startup test, but the precise firmware
-  trigger is unproven; do not repeatedly reconnect if the symptom recurs.
-- **Connection blocked:** automatic attempts stop after three connection failures
-  or short-lived connections. Repeated advertisements cannot bypass the
-  60-second cooldown. Leave the entry disabled if the instrument is affected;
-  reloading is an explicit reset of the attempt limit.
-- **Disconnected:** the PP automatically sleeps; this is normal. Leave HA
-  running and wake the instrument. No app pairing or account is required.
-- **Connected but no result:** wait for a completed successful TEST. An error
-  updates status/error code but retains the previous reading. Download
-  diagnostics and include the model/firmware when reporting an issue.
-- **Equal measurements:** use the Measurement event, whose sample ID distinguishes
-  separate tests; do not rely only on a numeric sensor crossing a threshold.
-- **Wrong time:** the device timestamp and HA receipt time may differ. Enable
-  Synchronize clock and set the device timezone if desired.
-- **Using the app temporarily:** disable the integration entry first so both
-  clients do not compete for the peripheral, then re-enable it afterward.
+| Symptom | What to check |
+| --- | --- |
+| Device not discovered | Wake the PP, close the app, and check Bluetooth coverage and free active proxy slots. Discovery matches `R2 PP *` devices advertising service `A0FF`. |
+| Disconnected | The instrument may have gone to sleep. Wake it and wait for **Connected** before testing. |
+| Connected but no new reading | Only a completed successful TEST updates the sample. Check Status and Last error code. |
+| Connection blocked | Automatic attempts stop after three failures or short connections. Check coverage and device behavior before reloading the integration to reset the limit. |
+| Unexpected timestamp | Compare HA receipt time with Measurement device time. The instrument clock and timezone are separate from HA's. |
+| Need to use the DiFluid app | Disable the integration entry while using the app, then re-enable it afterward. |
 
-Diagnostics omit Bluetooth addresses, serial numbers, raw packets, and sample
-values. Debug logging can include transport error details. Unloading disconnects
-and cancels listeners; removing the entry deletes its private latest-sample
-storage. HA's existing Recorder history follows HA's normal retention policy.
+**Boot logo followed by a black screen:** this was observed on the tested PP
+with early versions that connected immediately during startup. The current
+build waits before connecting, enforces retry limits, and passed a monitored
+startup check. The exact firmware trigger remains unproven. If it occurs,
+disable the integration, close the app, and retry power-on without a Bluetooth
+connection before making further connection attempts.
 
-## Development
+Physical TEST recording and Recorder persistence were verified on hardware.
+After the startup safeguards were added, connection and metadata reads were
+verified again; a fresh-sample measurement was not repeated. See the
+[validation details](docs/protocol.md#startup-safeguards-and-validation).
+
+## Report an issue or contribute
+
+[Open an issue](https://github.com/Pyrynot/ha-difluid/issues) with your exact model,
+firmware, HA version, integration version, Bluetooth adapter/proxy type, and steps
+to reproduce the problem. Attach the integration diagnostics from the device
+page when useful. Diagnostics omit Bluetooth addresses, serial numbers, raw
+packets, and sample values; review any additional debug logs before sharing them.
+
+Contributions for other models are welcome, but support needs device-specific
+captures and validation. The [protocol documentation](docs/protocol.md) separates
+verified behavior from unconfirmed fields and commands.
+
+Development requires Python 3.14.2 or newer and [uv](https://docs.astral.sh/uv/):
 
 ```sh
 uv sync --locked
@@ -148,10 +202,12 @@ uv run mypy custom_components/difluid --follow-imports=silent
 uv run pytest -q
 ```
 
-Tests include sanitized hardware frames, escaping and fragmentation, error and
-calibration rejection, BLE response routing/cancellation, config flows, actual
-HA entity setup, sample restoration, and replay suppression. No test connects to
-hardware. `tools/` contains optional development capture helpers; these are not
-used by the integration and should not run alongside HA's connection.
+Tests use sanitized fixtures and do not connect to hardware. The optional capture
+utilities in `tools/` are for development and must not run alongside HA's device
+connection.
 
-The software is MIT licensed; [brand assets have separate attribution](docs/branding.md).
+## License
+
+Integration code is available under the [MIT license](LICENSE). DiFluid logos and
+trademarks belong to their respective owners and are excluded from that license;
+see [brand attribution](docs/branding.md).
